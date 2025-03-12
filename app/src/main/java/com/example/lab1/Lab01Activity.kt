@@ -1,4 +1,4 @@
-package com.example.lab2
+package com.example.lab1
 
 import android.os.Bundle
 import android.widget.Button
@@ -6,13 +6,12 @@ import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
 import android.widget.Toolbar.LayoutParams
 import androidx.appcompat.app.AppCompatActivity
+import com.example.lab2.R
 import kotlin.math.absoluteValue
-import kotlin.math.sign
 
-class MainActivity : AppCompatActivity() {
+class Lab01Activity : AppCompatActivity() {
     lateinit var mLayout: LinearLayout
     lateinit var mTitle: TextView
     lateinit var mProgress: ProgressBar
@@ -68,7 +67,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.lab01_activity)
         mLayout = findViewById(R.id.main)
 
         mTitle = TextView(this)
@@ -184,12 +183,12 @@ class MainActivity : AppCompatActivity() {
     // println(items)	=> 2 ponieważ do zbudowania jednego egzemplarza potrzebne są 2 elementy "B" i jeden "A", a w magazynie mamy 2 "A" i 4 "B",
     // czyli do zbudowania trzeciego egzemplarza zabraknie elementów typu "B"
     fun task16(store: Map<String, UInt>, asset: Map<String, UInt>): UInt {
-        var amounts = mutableListOf<UInt>();
+        var amounts = mutableMapOf<String, UInt>()
         for ((key, value) in asset) {
             val hipo = store.get(key) ?: 0u
-            amounts.add(hipo / value)
+            amounts.set(key, hipo / value)
         }
 
-        return amounts.min()
+        return amounts.values.toList().max()
     }
 }

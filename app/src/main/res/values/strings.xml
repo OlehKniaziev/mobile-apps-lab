@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Lab2</string>
+    <string name="lab02">Lab02</string>
+    <string name="lab01">Lab01</string>
 </resources>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<GridLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/favorites_grid"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="@dimen/inner_margin"
+    android:useDefaultMargins="true"
+    android:columnCount="3">
+    <Button
+        android:id="@+id/main_6_6_board"
+        android:layout_rowWeight="1"
+        android:layout_columnWeight="1"
+        android:width="0dp"
+        android:pointerIcon="context_menu"
+        android:text="6 x 6"
+        android:onClick="onClick"
+        android:textSize="34sp"
+        app:icon="@drawable/baseline_5g_24"
+        app:iconGravity="textTop"
+        app:iconPadding="@dimen/icon_padding"
+        app:iconSize="48dp" />
+    <Button
+        android:id="@+id/main_4_4_board"
+        android:layout_rowWeight="1"
+        android:layout_columnWeight="1"
+        android:width="0dp"
+        android:pointerIcon="context_menu"
+        android:text="4 x 4"
+        android:onClick="onClick"
+        android:textSize="34sp"
+        app:icon="@drawable/baseline_5g_24"
+        app:iconGravity="textTop"
+        app:iconPadding="@dimen/icon_padding"
+        app:iconSize="48dp" />
+    <Space
+        android:layout_width="wrap_content"
+        android:minWidth="@dimen/inner_margin"
+        android:layout_height="wrap_content" />
+
+    <Button
+        android:id="@+id/main_4_3_board"
+        android:layout_rowWeight="1"
+        android:layout_columnWeight="1"
+        android:width="0dp"
+        android:pointerIcon="context_menu"
+        android:text="4 x 3"
+        android:onClick="onClick"
+        android:textSize="34sp"
+        app:icon="@drawable/baseline_5g_24"
+        app:iconGravity="textTop"
+        app:iconPadding="@dimen/icon_padding"
+        app:iconSize="48dp" />
+    <Button
+        android:id="@+id/main_3_2_board"
+        android:layout_rowWeight="1"
+        android:layout_columnWeight="1"
+        android:width="0dp"
+        android:pointerIcon="context_menu"
+        android:text="3 x 2"
+        android:onClick="onClick"
+        android:textSize="34sp"
+        app:icon="@drawable/baseline_5g_24"
+        app:iconGravity="textTop"
+        app:iconPadding="@dimen/icon_padding"
+        app:iconSize="48dp" />
+    <Space
+        android:layout_width="wrap_content"
+        android:minWidth="@dimen/inner_margin"
+        android:layout_height="wrap_content" />
+</GridLayout>
