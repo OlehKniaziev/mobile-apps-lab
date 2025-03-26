@@ -18,6 +18,7 @@ class Lab03Activity : AppCompatActivity() {
     var cols : Int = 0
     var rows : Int = 0
     lateinit var board : GridLayout
+    lateinit var boardView: BoardView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,7 +37,7 @@ class Lab03Activity : AppCompatActivity() {
         board.columnCount = cols
         board.rowCount = rows
 
-        val boardView = BoardView(board, cols, rows)
+        boardView = BoardView(board, cols, rows)
 
         boardView.setOnGameChangeListener { e ->
             run {
@@ -45,7 +46,7 @@ class Lab03Activity : AppCompatActivity() {
                         for (tile in e.tiles) tile.revealed = true
                     }
                     GameState.Match -> {
-                        for (tile in e.tiles) tile.revealed = false
+                        for (tile in e.tiles) tile.revealed = true
                     }
                     GameState.NoMatch -> {
                         for (tile in e.tiles) tile.revealed = true
@@ -61,5 +62,15 @@ class Lab03Activity : AppCompatActivity() {
                 }
             }
         }
+
+        if (savedInstanceState != null) {
+            val state = savedInstanceState.getIntArray("state")
+            boardView.setState(state!!)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putIntArray("state", boardView.getState())
     }
 }

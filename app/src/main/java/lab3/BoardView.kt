@@ -35,6 +35,7 @@ class BoardView(
         R.drawable.diamonds_king,
     )
 
+    private val state: MutableList<MutableList<Int>> = MutableList(rows) { MutableList(cols) { -1 } }
     private val deckResource: Int = R.drawable.card_back_02
     private var onGameChangeStateListener: (GameEvent) -> Unit = { (e) -> }
     private val matchedPair: Stack<Tile> = Stack()
@@ -80,6 +81,11 @@ class BoardView(
         onGameChangeStateListener(GameEvent(matchedPair.toList(), matchResult))
         if (matchResult != GameState.Matching) {
             matchedPair.clear()
+        } else {
+            val tag = v.tag as String;
+            val row = tag.substring(0, 1).toInt()
+            val col = tag.substring(2, 3).toInt()
+            state[row][col] = tileValue
         }
     }
 
@@ -91,5 +97,25 @@ class BoardView(
         button.setOnClickListener(::onClickTile)
         val tile = Tile(button, resourceImage, deckResource)
         tiles[button.tag.toString()] = tile
+    }
+
+    fun getState() : IntArray {
+        return state.flatten().toIntArray()
+    }
+
+    fun setState(state: IntArray): Unit {
+        val clickedSet = mutableSetOf<Int>()
+        var i = 0;
+        for (r in 0..<rows) {
+            for (c in 0..<cols) {
+                this.state[c][r] = state[i]
+                val tag = "${c}x${r}"
+                if (state[i] == -1) continue;
+                if (clickedSet.contains(state[i])) onClickTile(tiles[tag]!!.button)
+                else clickedSet.add(state[i])
+
+                ++i
+            }
+        }
     }
 }
