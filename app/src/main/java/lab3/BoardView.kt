@@ -1,11 +1,16 @@
 package lab3
 
+import android.animation.Animator
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.view.Gravity
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.widget.GridLayout
 import android.widget.ImageButton
 import com.example.lab2.R
 import java.util.Stack
+import java.util.Random
 
 class BoardView(
     private val gridLayout: GridLayout,
@@ -71,8 +76,76 @@ class BoardView(
             }
         }
     }
+
+    private fun animatePairedButton(button: ImageButton, action: Runnable) {
+        val set = AnimatorSet()
+        val random = Random()
+        button.pivotX = random.nextFloat() * 200f
+        button.pivotY = random.nextFloat() * 200f
+
+        val rotation = ObjectAnimator.ofFloat(button, "rotation", 1080f)
+        val scallingX = ObjectAnimator.ofFloat(button, "scaleX", 1f, 4f)
+        val scallingY = ObjectAnimator.ofFloat(button, "scaleY", 1f, 4f)
+        val fade = ObjectAnimator.ofFloat(button, "alpha", 1f, 0f)
+        set.startDelay = 0
+        set.duration = 500
+        set.interpolator = DecelerateInterpolator()
+        set.playTogether(rotation, scallingX, scallingY, fade)
+        set.addListener(object: Animator.AnimatorListener {
+            override fun onAnimationStart(animator: Animator) {
+            }
+
+            override fun onAnimationEnd(animator: Animator) {
+                button.scaleX = 1f
+                button.scaleY = 1f
+                button.alpha = 0.0f
+                action.run();
+            }
+
+            override fun onAnimationCancel(animator: Animator) {
+            }
+
+            override fun onAnimationRepeat(animator: Animator) {
+            }
+        })
+        set.start()
+    }
+
+    private fun animateButtonsOnMatchFailure(tile: Tile) {
+        val button = tile.button
+
+        val set = AnimatorSet()
+
+        val goRight = ObjectAnimator.ofFloat(button, "x", button.x, button.x + 300)
+        val goLeft = ObjectAnimator.ofFloat(button, "x", button.x + 300, button.x - 300)
+        val goStart = ObjectAnimator.ofFloat(button, "x", button.x - 300, button.x)
+        set.startDelay = 0
+        set.duration = 500
+        set.interpolator = DecelerateInterpolator()
+        set.playSequentially(goRight, goLeft, goStart)
+        set.addListener(object: Animator.AnimatorListener {
+            override fun onAnimationStart(animator: Animator) {
+            }
+
+            override fun onAnimationEnd(animator: Animator) {
+                button.scaleX = 1f
+                button.scaleY = 1f
+                button.alpha = 0.0f
+                tile.revealed = false
+            }
+
+            override fun onAnimationCancel(animator: Animator) {
+            }
+
+            override fun onAnimationRepeat(animator: Animator) {
+            }
+        })
+        set.start()
+    }
+
     private fun onClickTile(v: View) {
         val tile = tiles[v.tag]
+        if (matchedPair.lastOrNull() == tile) return;
         matchedPair.push(tile)
 
         val tileValue = tile?.tileResource ?: -1
@@ -90,7 +163,20 @@ class BoardView(
     }
 
     fun setOnGameChangeListener(listener: (event: GameEvent) -> Unit) {
-        onGameChangeStateListener = listener
+        onGameChangeStateListener = { e ->
+            if (e.state == GameState.NoMatch) {
+                listener(e)
+                for (tile in e.tiles) {
+                    animateButtonsOnMatchFailure(tile)
+                }
+            } else if (e.state == GameState.Match) {
+                for (tile in e.tiles) {
+                    animatePairedButton(tile.button, { listener(e) })
+                }
+            } else {
+                listener(e)
+            }
+        }
     }
 
     private fun addTile(button: ImageButton, resourceImage: Int) {
