@@ -49,7 +49,6 @@ class BoardView(
         val shuffledIcons: MutableList<Int> = mutableListOf<Int>().also {
             it.addAll(icons.subList(0, cols * rows / 2))
             it.addAll(icons.subList(0, cols * rows / 2))
-            it.shuffle()
         }
 
         // tu umieść kod pętli tworzący wszystkie karty, który jest obecnie
