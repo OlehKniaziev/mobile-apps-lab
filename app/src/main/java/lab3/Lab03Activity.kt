@@ -11,6 +11,7 @@ import android.widget.ImageButton
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.example.lab2.R
@@ -35,6 +36,9 @@ class Lab03Activity : AppCompatActivity()  {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+
+        val toolbar = findViewById<Toolbar>(R.id.toolbar)
+        setSupportActionBar(toolbar)
 
         cols = intent.getIntExtra("cols", 3)
         rows = intent.getIntExtra("rows", 3)
@@ -90,26 +94,25 @@ class Lab03Activity : AppCompatActivity()  {
         negativePlayer.reset()
     }
 
-    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
         val inflater = menuInflater
         inflater.inflate(R.menu.board_activity_menu, menu)
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when(item.getItemId()) {
-            R.id.board_activity_sound -> {
-                if (item.getIcon()?.getConstantState()?.equals(getResources().getDrawable(R.drawable.baseline_volume_up_24, getTheme()).getConstantState()) ?: false) {
-                    Toast.makeText(this, "Sound turn off", Toast.LENGTH_SHORT).show();
-                    item.setIcon(R.drawable.baseline_volume_mute_24)
-                    isSoundEnabled = false;
-                } else {
-                    Toast.makeText(this, "Sound turn on", Toast.LENGTH_SHORT).show()
-                    item.setIcon(R.drawable.baseline_volume_up_24)
-                    isSoundEnabled = true
-                }
-            }
+        if (item.itemId != R.id.board_activity_sound) return false
+
+        if (isSoundEnabled) {
+            Toast.makeText(this, "Sound turn off", Toast.LENGTH_SHORT).show();
+            item.setIcon(R.drawable.baseline_volume_mute_24)
+            isSoundEnabled = false;
+            return true
+        } else {
+            Toast.makeText(this, "Sound turn on", Toast.LENGTH_SHORT).show()
+            item.setIcon(R.drawable.baseline_volume_up_24)
+            isSoundEnabled = true
+            return true
         }
-        return false
     }
 }

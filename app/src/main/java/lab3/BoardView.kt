@@ -128,9 +128,6 @@ class BoardView(
             }
 
             override fun onAnimationEnd(animator: Animator) {
-                button.scaleX = 1f
-                button.scaleY = 1f
-                button.alpha = 0.0f
                 tile.revealed = false
             }
 
@@ -152,13 +149,38 @@ class BoardView(
         val matchResult = logic.process(tileValue)
 
         onGameChangeStateListener(GameEvent(matchedPair.toList(), matchResult))
+        when (matchResult) {
+            GameState.Matching -> {
+                for (v in matchedPair) {
+                    val tag = v.button.tag as String
+                    val row = tag.substring(0, 1).toInt()
+                    val col = tag.substring(2, 3).toInt()
+                    state[row][col] = 2
+                }
+            }
+            GameState.NoMatch -> {
+                for (v in matchedPair) {
+                    val tag = v.button.tag as String
+                    val row = tag.substring(0, 1).toInt()
+                    val col = tag.substring(2, 3).toInt()
+                    state[row][col] = -1
+                }
+            }
+            GameState.Match -> {
+                for (v in matchedPair) {
+                    val tag = v.button.tag as String
+                    val row = tag.substring(0, 1).toInt()
+                    val col = tag.substring(2, 3).toInt()
+                    state[row][col] = 1
+                }
+            }
+            else -> {
+
+            }
+        }
+
         if (matchResult != GameState.Matching) {
             matchedPair.clear()
-        } else {
-            val tag = v.tag as String;
-            val row = tag.substring(0, 1).toInt()
-            val col = tag.substring(2, 3).toInt()
-            state[row][col] = tileValue
         }
     }
 
@@ -190,16 +212,18 @@ class BoardView(
     }
 
     fun setState(state: IntArray): Unit {
-        val clickedSet = mutableSetOf<Int>()
         var i = 0;
         for (r in 0..<rows) {
             for (c in 0..<cols) {
-                this.state[c][r] = state[i]
-                val tag = "${c}x${r}"
-                if (state[i] == -1) continue;
-                if (clickedSet.contains(state[i])) onClickTile(tiles[tag]!!.button)
-                else clickedSet.add(state[i])
-
+                this.state[r][c] = state[i]
+                val tag = "${r}x${c}"
+                if (state[i] == 1) {
+                    tiles[tag]!!.button.alpha = 0.0f
+                }
+                else if (state[i] == 2) {
+                    tiles[tag]!!.revealed = true
+                    onClickTile(tiles[tag]!!.button)
+                }
                 ++i
             }
         }
