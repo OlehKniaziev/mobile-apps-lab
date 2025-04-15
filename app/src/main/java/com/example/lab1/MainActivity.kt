@@ -32,4 +32,9 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, Lab2Activity::class.java);
         startActivity(intent);
     }
+
+    fun onClickMainBtnRunLab06(v: View) {
+        val intent = Intent(this, lab6.MainActivity::class.java)
+        startActivity(intent)
+    }
 }
