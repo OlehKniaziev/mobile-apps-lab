@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.VerticalAlignmentLine
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -485,6 +486,20 @@ fun TodoTaskInputForm(
                 )
             }
         }
+    }
+
+    var isDone by remember { mutableStateOf(false) }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(
+            checked = isDone,
+            onCheckedChange = {
+                isDone = !isDone
+                onValueChange(item.copy(isDone = isDone))
+            },
+        )
+
+        Text("Is done")
     }
 }
 
