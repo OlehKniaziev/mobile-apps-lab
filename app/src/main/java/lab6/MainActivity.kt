@@ -7,8 +7,11 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +20,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -25,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -34,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -41,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -60,16 +67,21 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import lab6.data.AppContainer
 import lab6.data.CurrentDateProvider
 import lab6.data.LocalDateConverter
 import lab6.data.LocalDateProvider
 import lab6.data.TodoApplication
 import lab6.data.TodoTask
+import lab6.data.TodoTaskEntity
 import lab6.data.TodoTaskRepository
 import java.time.Instant
+import java.time.Period
 import java.time.ZoneId
+import java.time.temporal.TemporalUnit
 import java.util.jar.Manifest
 
 const val notificationID = 121
@@ -78,13 +90,29 @@ const val titleExtra = "title"
 const val messageExtra = "message"
 
 class MainActivity : ComponentActivity() {
+    var soonestTask: TodoTask? = null
+    var soonestAlarmIntent: PendingIntent? = null
+
+    lateinit var preferences: SharedPreferences
+
+    var notifDaysBefore: Long = 1
+    var notifHoursBefore: Long = 0
+    var notifHourInterval: Long = 4
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         createNotificationChannel()
         container = (this.application as TodoApplication).container
-        scheduleAlarm(2000)
+
+        preferences = getPreferences(MODE_PRIVATE)
+
+        notifDaysBefore = preferences.getLong("days", 1)
+        notifHoursBefore = preferences.getLong("hours", 0)
+        notifHourInterval = preferences.getLong("interval", 4)
+
+        rescheduleAlarmIfNeeded()
 
         enableEdgeToEdge()
         setContent {
@@ -98,10 +126,35 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun rescheduleAlarmIfNeeded(): Unit {
+        val activity = this
+
+        lifecycleScope.launch {
+            container.todoTaskRepository.getAllAsStream().collect { collector ->
+                if (collector.isEmpty()) return@collect
+
+                val soonestTask = collector.minBy { task -> task.deadline }
+                if (activity.soonestTask == null || soonestTask.deadline < activity.soonestTask!!.deadline) return@collect
+
+                activity.soonestTask = soonestTask
+
+                val deadline = activity.soonestTask!!.deadline.minusDays(notifDaysBefore)
+                val deadlineMillis =
+                    LocalDateConverter.toMillis(deadline) - notifHoursBefore * AlarmManager.INTERVAL_HOUR
+
+                val alarmManager = getSystemService(AlarmManager::class.java)
+                if (activity.soonestAlarmIntent != null)
+                    alarmManager.cancel(activity.soonestAlarmIntent!!)
+
+                scheduleAlarm(deadlineMillis)
+            }
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     @OptIn(ExperimentalPermissionsApi::class)
     @Composable
-    fun MainScreen(context: TodoApplication? = null) {
+    fun MainScreen() {
         val navController = rememberNavController()
         val postNotificationPermission =
             rememberPermissionState(permission = android.Manifest.permission.POST_NOTIFICATIONS)
@@ -110,9 +163,17 @@ class MainActivity : ComponentActivity() {
                 postNotificationPermission.launchPermissionRequest()
             }
         }
+        val activity = this
         NavHost(navController = navController, startDestination = "list") {
             composable("list") { ListScreen(navController = navController) }
-            composable("form") { FormScreen(navController = navController) }
+            composable("form") {
+                FormScreen(
+                    navController = navController, mainActivity = activity
+                )
+            }
+            composable("settings") {
+                SettingsScreen(navController = navController)
+            }
         }
     }
 
@@ -125,25 +186,92 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @Composable
+    fun SettingsScreen(navController: NavController) {
+        Scaffold(
+            topBar = {
+                AppTopBar(
+                    navController = navController,
+                    title = "Settings",
+                    showBackIcon = true,
+                    route = "settings",
+                )
+            },
+            content = { pad ->
+                Column(modifier = Modifier.padding(pad)) {
+                    var days by remember { mutableLongStateOf(notifDaysBefore) }
+                    var hours by remember { mutableLongStateOf(notifHoursBefore) }
+                    var interval by remember { mutableLongStateOf(notifHourInterval) }
+
+                    OutlinedTextField(
+                        value = days.toString(),
+                        onValueChange = {
+                            if (it.isEmpty()) days = 0
+                            else days = it.toLong()
+
+                            with (preferences.edit()) {
+                                putLong("days", days)
+                                apply()
+                            }
+                        },
+                        label = { Text("Days before deadline") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+
+                    OutlinedTextField(
+                        value = hours.toString(),
+                        onValueChange = {
+                            if (it.isEmpty()) hours = 0
+                            else hours = it.toLong()
+
+                            with (preferences.edit()) {
+                                putLong("hours", hours)
+                                apply()
+                            }
+                        },
+                        label = { Text("Hours before deadline") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+
+                    OutlinedTextField(
+                        value = interval.toString(),
+                        onValueChange = {
+                            if (it.isEmpty()) interval = 0
+                            else interval = it.toLong()
+
+                            with (preferences.edit()) {
+                                putLong("interval", interval)
+                                apply()
+                            }
+                        },
+                        label = { Text("Hour notification interval") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                }
+            }
+        )
+
+    }
+
     fun scheduleAlarm(time: Long) {
         val intent = Intent(applicationContext, NotificationBroadcastReceiver::class.java)
         intent.putExtra(titleExtra, "Deadline")
         intent.putExtra(messageExtra, "Zbliża się termin zakończenia zadania")
 
         val pendingIntent = PendingIntent.getBroadcast(
-            applicationContext,
-            notificationID,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            applicationContext, 0, intent, PendingIntent.FLAG_IMMUTABLE
         )
 
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
 
-        alarmManager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
+        alarmManager.setRepeating(
+            AlarmManager.ELAPSED_REALTIME,
             time,
+            AlarmManager.INTERVAL_HOUR * notifHourInterval,
             pendingIntent
         )
+
+        soonestAlarmIntent = pendingIntent
     }
 
     private fun createNotificationChannel() {
@@ -164,17 +292,14 @@ class MainActivity : ComponentActivity() {
 }
 
 class NotificationHandler(private val context: Context) {
-    private val notificationManager =
-        context.getSystemService(NotificationManager::class.java)
+    private val notificationManager = context.getSystemService(NotificationManager::class.java)
 
     fun showSimpleNotification() {
-        val notification = NotificationCompat.Builder(context, channelID)
-            .setContentTitle("Proste powiadomienie")
-            .setContentText("Tekst powiadomienia")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setPriority(NotificationManager.IMPORTANCE_HIGH)
-            .setAutoCancel(true)
-            .build()
+        val notification =
+            NotificationCompat.Builder(context, channelID).setContentTitle("Proste powiadomienie")
+                .setContentText("Tekst powiadomienia")
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setPriority(NotificationManager.IMPORTANCE_HIGH).setAutoCancel(true).build()
         notificationManager.notify(notificationID, notification)
     }
 }
@@ -184,9 +309,9 @@ class NotificationBroadcastReceiver : BroadcastReceiver() {
         val notification = NotificationCompat.Builder(context, channelID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(intent?.getStringExtra(titleExtra))
-            .setContentText(intent?.getStringExtra(messageExtra))
-            .build()
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            .setContentText(intent?.getStringExtra(messageExtra)).build()
+        val manager =
+            context.getSystemService(NotificationManager::class.java) as NotificationManager
         manager.notify(notificationID, notification)
     }
 }
@@ -238,8 +363,7 @@ fun ListScreen(
 }
 
 class FormViewModel(
-    private val repository: TodoTaskRepository,
-    private val dateProvider: LocalDateProvider
+    private val repository: TodoTaskRepository, private val dateProvider: LocalDateProvider
 ) : ViewModel() {
 
     var todoTaskUiState by mutableStateOf(TodoTaskUiState())
@@ -261,15 +385,13 @@ class FormViewModel(
             val instant = date.atStartOfDay(ZoneId.systemDefault()).toInstant()
             val millis = instant.toEpochMilli()
 
-            title.isNotBlank() &&
-                    deadline > millis
+            title.isNotBlank() && deadline > millis
         }
     }
 }
 
 data class TodoTaskUiState(
-    var todoTask: TodoTaskForm = TodoTaskForm(),
-    val isValid: Boolean = false
+    var todoTask: TodoTaskForm = TodoTaskForm(), val isValid: Boolean = false
 )
 
 data class TodoTaskForm(
@@ -281,8 +403,7 @@ data class TodoTaskForm(
 )
 
 fun TodoTask.toTodoTaskUiState(isValid: Boolean = false): TodoTaskUiState = TodoTaskUiState(
-    todoTask = this.toTodoTaskForm(),
-    isValid = isValid
+    todoTask = this.toTodoTaskForm(), isValid = isValid
 )
 
 fun TodoTaskForm.toTodoTask(): TodoTask = TodoTask(
@@ -309,13 +430,9 @@ fun TodoTaskInputForm(
     onValueChange: (TodoTaskForm) -> Unit = {},
     enabled: Boolean = true
 ) {
-    OutlinedTextField(
-        value = item.title,
-        onValueChange = {
-            onValueChange(item.copy(title = it))
-        },
-        label = { Text("Title") }
-    )
+    OutlinedTextField(value = item.title, onValueChange = {
+        onValueChange(item.copy(title = it))
+    }, label = { Text("Title") })
     val datePickerState = rememberDatePickerState(
         initialDisplayMode = DisplayMode.Picker,
         yearRange = IntRange(2000, 2030),
@@ -335,19 +452,16 @@ fun TodoTaskInputForm(
         style = MaterialTheme.typography.headlineMedium
     )
     if (showDialog) {
-        DatePickerDialog(
-            onDismissRequest = {
+        DatePickerDialog(onDismissRequest = {
+            showDialog = false
+        }, confirmButton = {
+            Button(onClick = {
                 showDialog = false
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showDialog = false
-                    onValueChange(item.copy(deadline = datePickerState.selectedDateMillis!!))
-                }) {
-                    Text("Pick")
-                }
+                onValueChange(item.copy(deadline = datePickerState.selectedDateMillis!!))
+            }) {
+                Text("Pick")
             }
-        ) {
+        }) {
             DatePicker(state = datePickerState, showModeToggle = true)
         }
     }
@@ -362,15 +476,12 @@ fun TodoTaskInputForm(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RadioButton(
-                    selected = selectedPriority == prio,
-                    onClick = {
+                    selected = selectedPriority == prio, onClick = {
                         selectedPriority =
                             prio; onValueChange(item.copy(priority = selectedPriority.name))
-                    }
-                )
+                    })
                 Text(
-                    text = prio.name,
-                    modifier = Modifier.fillMaxWidth()
+                    text = prio.name, modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -384,23 +495,19 @@ fun TodoTaskInputBody(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         TodoTaskInputForm(
-            item = todoUiState.todoTask,
-            onValueChange = onItemValueChange,
-            modifier = modifier
+            item = todoUiState.todoTask, onValueChange = onItemValueChange, modifier = modifier
         )
     }
 }
-
-data class FormState(val title: String, val priority: Priority, val date: LocalDate)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FormScreen(
     navController: NavController,
+    mainActivity: MainActivity,
     viewModel: FormViewModel = viewModel(factory = FormViewModelProvider.Factory)
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -415,13 +522,11 @@ fun FormScreen(
                 onSaveClick = {
                     coroutineScope.launch {
                         viewModel.save()
+                        mainActivity.rescheduleAlarmIfNeeded()
                         navController.navigate("list")
                     }
-                }
-            )
-        }
-    )
-    {
+                })
+        }) {
         TodoTaskInputBody(
             todoUiState = viewModel.todoTaskUiState,
             onItemValueChange = viewModel::updateUiState,
@@ -456,20 +561,16 @@ fun AppTopBar(
                 OutlinedButton(
                     onClick = {
                         onSaveClick()
-                    }
-                ) {
+                    }) {
                     Text(
                         text = "Zapisz", fontSize = 18.sp
                     )
                 }
-            } else {
+            } else if (route == "list") {
                 IconButton(onClick = {
-                    MainActivity.container.notificationHandler.showSimpleNotification()
+                    navController.navigate("settings")
                 }) {
                     Icon(imageVector = Icons.Default.Settings, contentDescription = "")
-                }
-                IconButton(onClick = { /*TODO*/ }) {
-                    Icon(imageVector = Icons.Default.Home, contentDescription = "")
                 }
             }
         })
@@ -518,12 +619,11 @@ fun ListItem(item: TodoTask, modifier: Modifier = Modifier) {
 class ListViewModel(val repository: TodoTaskRepository) : ViewModel() {
     val listUiState: StateFlow<ListUiState>
         get() {
-            return repository.getAllAsStream().map { ListUiState(it) }
-                .stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
-                    initialValue = ListUiState()
-                )
+            return repository.getAllAsStream().map { ListUiState(it) }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
+                initialValue = ListUiState()
+            )
         }
 
     companion object {
@@ -558,13 +658,6 @@ fun CreationExtras.todoApplication(): TodoApplication {
     val app = this[APPLICATION_KEY]
     return app as TodoApplication
 }
-
-val todoTasks = mutableListOf(
-    TodoTask(0, "Programming", LocalDate.of(2024, 4, 18), false, Priority.Low),
-    TodoTask(1, "Teaching", LocalDate.of(2024, 5, 12), false, Priority.High),
-    TodoTask(2, "Learning", LocalDate.of(2024, 6, 28), true, Priority.Low),
-    TodoTask(3, "Cooking", LocalDate.of(2024, 8, 18), false, Priority.Medium),
-)
 
 enum class Priority() {
     Low, Medium, High

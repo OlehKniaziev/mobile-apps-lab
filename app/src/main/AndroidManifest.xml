@@ -38,6 +38,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name="lab6.NotificationBroadcastReceiver"
+            android:enabled="true"
+            />
     </application>
 
 </manifest>
