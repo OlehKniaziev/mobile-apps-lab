@@ -15,11 +15,14 @@ import androidx.room.TypeConverters
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import lab6.Priority
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+
+enum class Priority() {
+    Low, Medium, High
+}
 
 @Entity(tableName = "tasks")
 data class TodoTask(
@@ -162,6 +165,6 @@ class DatabaseTodoTaskRepository(val dao: TodoTaskDao) : TodoTaskRepository {
     }
 
     override suspend fun updateItem(item: TodoTask) {
-        TODO("Not yet implemented")
+        dao.update(TodoTaskEntity.fromModel(item))
     }
 }

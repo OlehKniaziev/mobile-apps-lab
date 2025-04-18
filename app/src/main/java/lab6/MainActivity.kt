@@ -10,8 +10,6 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -38,7 +36,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.VerticalAlignmentLine
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -46,44 +43,23 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import lab6.ui.theme.Lab6Theme
-import java.time.LocalDate
 import com.example.lab2.R
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import lab6.data.AppContainer
-import lab6.data.CurrentDateProvider
 import lab6.data.LocalDateConverter
-import lab6.data.LocalDateProvider
+import lab6.data.Priority
 import lab6.data.TodoApplication
 import lab6.data.TodoTask
-import lab6.data.TodoTaskEntity
-import lab6.data.TodoTaskRepository
-import java.time.Instant
-import java.time.Period
-import java.time.ZoneId
-import java.time.temporal.TemporalUnit
-import java.util.jar.Manifest
 
 const val notificationID = 121
 const val channelID = "Lab06 channel"
@@ -292,19 +268,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-class NotificationHandler(private val context: Context) {
-    private val notificationManager = context.getSystemService(NotificationManager::class.java)
-
-    fun showSimpleNotification() {
-        val notification =
-            NotificationCompat.Builder(context, channelID).setContentTitle("Proste powiadomienie")
-                .setContentText("Tekst powiadomienia")
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
-                .setPriority(NotificationManager.IMPORTANCE_HIGH).setAutoCancel(true).build()
-        notificationManager.notify(notificationID, notification)
-    }
-}
-
 class NotificationBroadcastReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val notification = NotificationCompat.Builder(context, channelID)
@@ -362,66 +325,6 @@ fun ListScreen(
         }
     })
 }
-
-class FormViewModel(
-    private val repository: TodoTaskRepository, private val dateProvider: LocalDateProvider
-) : ViewModel() {
-
-    var todoTaskUiState by mutableStateOf(TodoTaskUiState())
-        private set
-
-    suspend fun save() {
-        if (validate()) {
-            repository.insertItem(todoTaskUiState.todoTask.toTodoTask())
-        }
-    }
-
-    fun updateUiState(todoTaskForm: TodoTaskForm) {
-        todoTaskUiState = TodoTaskUiState(todoTask = todoTaskForm, isValid = validate(todoTaskForm))
-    }
-
-    private fun validate(uiState: TodoTaskForm = todoTaskUiState.todoTask): Boolean {
-        return with(uiState) {
-            val date = dateProvider.getDate()
-            val instant = date.atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val millis = instant.toEpochMilli()
-
-            title.isNotBlank() && deadline > millis
-        }
-    }
-}
-
-data class TodoTaskUiState(
-    var todoTask: TodoTaskForm = TodoTaskForm(), val isValid: Boolean = false
-)
-
-data class TodoTaskForm(
-    val id: Int = 0,
-    val title: String = "",
-    val deadline: Long = LocalDateConverter.toMillis(LocalDate.now()),
-    val isDone: Boolean = false,
-    val priority: String = Priority.Low.name
-)
-
-fun TodoTask.toTodoTaskUiState(isValid: Boolean = false): TodoTaskUiState = TodoTaskUiState(
-    todoTask = this.toTodoTaskForm(), isValid = isValid
-)
-
-fun TodoTaskForm.toTodoTask(): TodoTask = TodoTask(
-    id = id,
-    title = title,
-    deadline = LocalDateConverter.fromMillis(deadline),
-    isDone = isDone,
-    priority = Priority.valueOf(priority)
-)
-
-fun TodoTask.toTodoTaskForm(): TodoTaskForm = TodoTaskForm(
-    id = id,
-    title = title,
-    deadline = LocalDateConverter.toMillis(deadline),
-    isDone = isDone,
-    priority = priority.name
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -629,51 +532,4 @@ fun ListItem(item: TodoTask, modifier: Modifier = Modifier) {
             }
         }
     }
-}
-
-class ListViewModel(val repository: TodoTaskRepository) : ViewModel() {
-    val listUiState: StateFlow<ListUiState>
-        get() {
-            return repository.getAllAsStream().map { ListUiState(it) }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(TIMEOUT_MILLIS),
-                initialValue = ListUiState()
-            )
-        }
-
-    companion object {
-        private const val TIMEOUT_MILLIS = 5_000L
-    }
-}
-
-data class ListUiState(val items: List<TodoTask> = listOf())
-
-object AppViewModelProvider {
-    val Factory = viewModelFactory {
-        initializer {
-            ListViewModel(
-                repository = todoApplication().container.todoTaskRepository
-            )
-        }
-    }
-}
-
-object FormViewModelProvider {
-    val Factory = viewModelFactory {
-        initializer {
-            FormViewModel(
-                repository = todoApplication().container.todoTaskRepository,
-                dateProvider = CurrentDateProvider()
-            )
-        }
-    }
-}
-
-fun CreationExtras.todoApplication(): TodoApplication {
-    val app = this[APPLICATION_KEY]
-    return app as TodoApplication
-}
-
-enum class Priority() {
-    Low, Medium, High
 }
