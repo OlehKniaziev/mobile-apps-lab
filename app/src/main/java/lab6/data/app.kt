@@ -5,11 +5,11 @@ import android.content.Context
 import lab6.NotificationHandler
 import java.time.LocalDate
 
-interface CurrentDateProvider {
+interface LocalDateProvider {
     fun getDate(): LocalDate
 }
 
-class LocalDateProvider : CurrentDateProvider {
+class CurrentDateProvider : LocalDateProvider {
     override fun getDate(): LocalDate = LocalDate.now()
 }
 

@@ -547,7 +547,8 @@ object FormViewModelProvider {
     val Factory = viewModelFactory {
         initializer {
             FormViewModel(
-                repository = todoApplication().container.todoTaskRepository
+                repository = todoApplication().container.todoTaskRepository,
+                dateProvider = CurrentDateProvider()
             )
         }
     }
