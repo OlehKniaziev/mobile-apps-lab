@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -60,6 +61,7 @@ import lab6.data.LocalDateConverter
 import lab6.data.Priority
 import lab6.data.TodoApplication
 import lab6.data.TodoTask
+import java.time.LocalDate
 
 const val notificationID = 121
 const val channelID = "Lab06 channel"
@@ -110,8 +112,8 @@ class MainActivity : ComponentActivity() {
             container.todoTaskRepository.getAllAsStream().collect { collector ->
                 if (collector.isEmpty()) return@collect
 
-                val soonestTask = collector.minBy { task -> task.deadline }
-                if (activity.soonestTask == null || soonestTask.deadline < activity.soonestTask!!.deadline) return@collect
+                val soonestTask = collector.filter { !it.isDone }.minBy { task -> task.deadline }
+                if (activity.soonestTask != null && soonestTask.deadline >= activity.soonestTask!!.deadline) return@collect
 
                 activity.soonestTask = soonestTask
 
@@ -123,7 +125,7 @@ class MainActivity : ComponentActivity() {
                 if (activity.soonestAlarmIntent != null)
                     alarmManager.cancel(activity.soonestAlarmIntent!!)
 
-                scheduleAlarm(deadlineMillis)
+                scheduleAlarm(deadlineMillis, activity.soonestTask!!.title)
             }
         }
     }
@@ -230,10 +232,12 @@ class MainActivity : ComponentActivity() {
 
     }
 
-    fun scheduleAlarm(time: Long) {
+    fun scheduleAlarm(time: Long, taskName: String) {
+        var time = time
+
         val intent = Intent(applicationContext, NotificationBroadcastReceiver::class.java)
         intent.putExtra(titleExtra, "Deadline")
-        intent.putExtra(messageExtra, "Zbliża się termin zakończenia zadania")
+        intent.putExtra(messageExtra, "Zbliża się termin zakończenia zadania '$taskName'")
 
         val pendingIntent = PendingIntent.getBroadcast(
             applicationContext, 0, intent, PendingIntent.FLAG_IMMUTABLE
@@ -241,8 +245,13 @@ class MainActivity : ComponentActivity() {
 
         val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
 
+        val timestamp = LocalDateConverter.toMillis(LocalDate.now())
+        Log.d("timestamp", "$time vs $timestamp")
+
+        if (time < timestamp) time = timestamp + 5000
+
         alarmManager.setRepeating(
-            AlarmManager.ELAPSED_REALTIME,
+            AlarmManager.RTC,
             time,
             AlarmManager.INTERVAL_HOUR * notifHourInterval,
             pendingIntent

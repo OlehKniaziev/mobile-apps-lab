@@ -2,7 +2,6 @@ package lab6.data
 
 import android.app.Application
 import android.content.Context
-import lab6.NotificationHandler
 import java.time.LocalDate
 
 interface LocalDateProvider {
@@ -15,16 +14,11 @@ class CurrentDateProvider : LocalDateProvider {
 
 interface AppContainer {
     val todoTaskRepository: TodoTaskRepository
-    val notificationHandler: NotificationHandler
 }
 
 class AppDataContainer(private val context: Context): AppContainer{
     override val todoTaskRepository: TodoTaskRepository by lazy{
         DatabaseTodoTaskRepository(AppDatabase.getInstance(context).taskDao())
-    }
-
-    override val notificationHandler: NotificationHandler by lazy {
-        NotificationHandler(context)
     }
 }
 
